@@ -85,8 +85,9 @@ export class AuthController {
       passwordHash: hash,
     });
 
-    // Return user without password
-    const { passwordHash, ...result } = user;
+    // Return user without password - exclude passwordHash from response
+    const { passwordHash: _, ...result } = user;
+    void _; // Mark as intentionally unused
     return result;
   }
 

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { News } from './news.entity';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -134,11 +134,14 @@ export class NewsService {
     }
 
     // Create new article
+    const publishedAt = articleDto.publishedAt
+      ? new Date(articleDto.publishedAt)
+      : new Date();
     const article = this.newsRepository.create({
       title: articleDto.title,
       url: articleDto.url,
       source: articleDto.source,
-      publishedAt: new Date(articleDto.publishedAt),
+      publishedAt,
       sentimentScore: null, // Will be populated by sentiment service
     });
 
@@ -149,7 +152,7 @@ export class NewsService {
    * Scheduled job to fetch and save new articles every 15 minutes.
    * Uses upsert logic to skip duplicates based on URL.
    */
-  @Cron(CronExpression.EVERY_15_MINUTES)
+  @Cron('0 */15 * * * *')
   async fetchAndSaveArticles(): Promise<void> {
     this.logger.log('Running scheduled news fetch job...');
 
