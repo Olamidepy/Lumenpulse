@@ -549,19 +549,36 @@ mod test {
     // ── Execute ───────────────────────────────────────────────
 
     #[test]
-    fn test_upgrade_executes_after_approval() {
+    fn test_consume_approval_executes_after_threshold() {
+        // env.deployer().update_current_contract_wasm() is unavailable in the
+        // test environment, so we verify consume_approval via set_admin, which
+        // exercises the identical code path without hitting the deployer.
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let id = client.propose(&s.alice, &ProposalAction::SetAdmin);
+        client.sign(&s.bob, &id); // threshold reached
+
+        let new_admin = Address::generate(&s.env);
+        client.set_admin(&s.alice, &id, &new_admin);
+
+        // Proposal must be Executed — replay is now impossible.
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Executed);
+    }
+
+    #[test]
+    fn test_upgrade_approved_before_execution() {
+        // Verifies the proposal reaches Approved status when threshold is met,
+        // which is the pre-condition for upgrade execution.
         let s = setup();
         let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
 
         let id = client.propose(&s.alice, &ProposalAction::Upgrade);
-        client.sign(&s.bob, &id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Pending);
 
-        let wasm_hash = BytesN::from_array(&s.env, &[1u8; 32]);
-        let _ = client.try_upgrade(&s.alice, &id, &wasm_hash);
-        // Deployer will panic in test env but consume_approval runs first,
-        // so we verify the proposal was marked Executed before the panic.
-        let proposal = client.get_proposal(&id);
-        assert_eq!(proposal.status, ProposalStatus::Executed);
+        let status = client.sign(&s.bob, &id);
+        assert_eq!(status, ProposalStatus::Approved);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Approved);
     }
 
     #[test]
@@ -681,23 +698,31 @@ mod test {
     // ── Full integration flow ─────────────────────────────────
 
     #[test]
-    fn test_full_upgrade_proposal_flow() {
+    fn test_full_proposal_flow() {
+        // Full lifecycle: propose → sign → sign → execute → replay blocked.
+        // Uses SetAdmin as the action since it doesn't require the deployer.
         let s = setup();
         let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
 
-        let id = client.propose(&s.alice, &ProposalAction::Upgrade);
+        // 1. Alice proposes (w=2, threshold=3) → Pending
+        let id = client.propose(&s.alice, &ProposalAction::SetAdmin);
         assert_eq!(client.get_proposal(&id).status, ProposalStatus::Pending);
 
+        // 2. Bob signs (w=1) → total=3=threshold → Approved
         let status = client.sign(&s.bob, &id);
         assert_eq!(status, ProposalStatus::Approved);
 
+        // 3. Carol signs over threshold — still Approved, not a state change
         let status = client.sign(&s.carol, &id);
         assert_eq!(status, ProposalStatus::Approved);
 
-        let wasm_hash = BytesN::from_array(&s.env, &[0xabu8; 32]);
-        let _ = client.try_upgrade(&s.alice, &id, &wasm_hash);
+        // 4. Alice executes → Executed
+        let new_admin = Address::generate(&s.env);
+        client.set_admin(&s.alice, &id, &new_admin);
         assert_eq!(client.get_proposal(&id).status, ProposalStatus::Executed);
 
-        assert!(client.try_upgrade(&s.alice, &id, &wasm_hash).is_err());
+        // 5. Replay attempt fails
+        let new_admin2 = Address::generate(&s.env);
+        assert!(client.try_set_admin(&s.alice, &id, &new_admin2).is_err());
     }
 }
