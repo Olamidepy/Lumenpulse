@@ -21,7 +21,7 @@ export class PortfolioSnapshotQueueService {
 
   constructor(
     @Inject(PORTFOLIO_SNAPSHOT_QUEUE)
-    private readonly queue: Queue,
+    private readonly queue: Queue<PortfolioSnapshotBatchJobData>,
     private readonly progressStore: PortfolioSnapshotProgressStore,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
@@ -91,6 +91,9 @@ export class PortfolioSnapshotQueueService {
             ? 'running'
             : 'queued';
 
+    const batchJobData =
+      job.name === PORTFOLIO_SNAPSHOT_BATCH_JOB ? job.data : null;
+
     return {
       batchId,
       status,
@@ -99,14 +102,16 @@ export class PortfolioSnapshotQueueService {
       failed: 0,
       progressPercent: 0,
       requestedAt:
-        typeof job.data?.requestedAt === 'string' ? job.data.requestedAt : null,
+        typeof batchJobData?.requestedAt === 'string'
+          ? batchJobData.requestedAt
+          : null,
       startedAt: job.processedOn
         ? new Date(job.processedOn).toISOString()
         : null,
       finishedAt: job.finishedOn
         ? new Date(job.finishedOn).toISOString()
         : null,
-      triggeredBy: job.data?.triggeredBy ?? 'unknown',
+      triggeredBy: batchJobData?.triggeredBy ?? 'unknown',
     };
   }
 

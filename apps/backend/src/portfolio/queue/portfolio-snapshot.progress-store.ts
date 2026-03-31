@@ -104,8 +104,7 @@ export class PortfolioSnapshotProgressStore {
       return;
     }
 
-    const status =
-      progress.failed > 0 ? 'completed_with_errors' : 'completed';
+    const status = progress.failed > 0 ? 'completed_with_errors' : 'completed';
     await this.redis.hset(this.key(batchId), {
       status,
       finishedAt: new Date().toISOString(),

@@ -94,7 +94,10 @@ export class RateLimitStorageService
     await this.store.set(key, entry, ttlMs);
   }
 
-  private toRecord(entry: RateLimitEntry, now: number): AppRateLimitStorageRecord {
+  private toRecord(
+    entry: RateLimitEntry,
+    now: number,
+  ): AppRateLimitStorageRecord {
     const timeToExpire = Math.max(Math.ceil((entry.expiresAt - now) / 1000), 0);
     const timeToBlockExpire = Math.max(
       Math.ceil((entry.blockedUntil - now) / 1000),

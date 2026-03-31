@@ -1,7 +1,13 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Job, Queue, QueueScheduler, Worker } from 'bullmq';
+import { Job, Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
@@ -23,8 +29,9 @@ import { PortfolioSnapshotProgressStore } from './portfolio-snapshot.progress-st
 @Injectable()
 export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PortfolioSnapshotWorker.name);
-  private worker?: Worker;
-  private scheduler?: QueueScheduler;
+  private worker?: Worker<
+    PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData
+  >;
 
   private readonly concurrency: number;
   private readonly batchSize: number;
@@ -33,7 +40,9 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @Inject(PORTFOLIO_SNAPSHOT_QUEUE)
-    private readonly queue: Queue,
+    private readonly queue: Queue<
+      PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData
+    >,
     @Inject(PORTFOLIO_SNAPSHOT_CONNECTION)
     private readonly connection: IORedis,
     @InjectRepository(User)
@@ -62,68 +71,85 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    this.scheduler = new QueueScheduler(PORTFOLIO_SNAPSHOT_QUEUE_NAME, {
+    this.worker = new Worker<
+      PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData
+    >(PORTFOLIO_SNAPSHOT_QUEUE_NAME, async (job) => this.process(job), {
       connection: this.connection,
+      concurrency: this.concurrency,
     });
 
-    this.worker = new Worker(
-      PORTFOLIO_SNAPSHOT_QUEUE_NAME,
-      async (job) => this.process(job),
-      {
-        connection: this.connection,
-        concurrency: this.concurrency,
-      },
-    );
-
-    this.worker.on('completed', async (job) => {
-      if (job.name === PORTFOLIO_SNAPSHOT_USER_JOB) {
-        await this.progressStore.ensureProgressKey(job.data.batchId);
-        await this.progressStore.incrementCompleted(job.data.batchId);
-        await this.progressStore.finalizeIfComplete(job.data.batchId);
-        this.metricsService.recordJobProcessed(
-          PORTFOLIO_SNAPSHOT_QUEUE_NAME,
-          'success',
-        );
-      }
+    this.worker.on('completed', (job) => {
+      void this.handleJobCompleted(job);
     });
 
-    this.worker.on('failed', async (job, err) => {
-      if (!job) {
-        return;
-      }
-
-      if (job.name !== PORTFOLIO_SNAPSHOT_USER_JOB) {
-        this.logger.error(
-          `Batch job ${job.id ?? 'unknown'} failed: ${err.message}`,
-        );
-        return;
-      }
-
-      const attempts = job.opts.attempts ?? 1;
-      if (job.attemptsMade < attempts) {
-        this.logger.warn(
-          `Snapshot retry queued for user ${job.data.userId} (attempt ${job.attemptsMade}/${attempts}).`,
-        );
-        return;
-      }
-
-      await this.progressStore.ensureProgressKey(job.data.batchId);
-      await this.progressStore.incrementFailed(job.data.batchId);
-      await this.progressStore.finalizeIfComplete(job.data.batchId);
-      this.metricsService.recordJobProcessed(
-        PORTFOLIO_SNAPSHOT_QUEUE_NAME,
-        'failure',
-      );
-
-      this.logger.error(
-        `Snapshot job failed for user ${job.data.userId}: ${err.message}`,
-      );
+    this.worker.on('failed', (job, err) => {
+      void this.handleJobFailed(job, err);
     });
   }
 
   async onModuleDestroy(): Promise<void> {
     await this.worker?.close();
-    await this.scheduler?.close();
+  }
+
+  private isUserJob(
+    job: Job<PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData>,
+  ): job is Job<PortfolioSnapshotUserJobData> {
+    return job.name === PORTFOLIO_SNAPSHOT_USER_JOB;
+  }
+
+  private async handleJobCompleted(
+    job: Job<PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData>,
+  ): Promise<void> {
+    if (!this.isUserJob(job)) {
+      return;
+    }
+
+    const { batchId } = job.data;
+    await this.progressStore.ensureProgressKey(batchId);
+    await this.progressStore.incrementCompleted(batchId);
+    await this.progressStore.finalizeIfComplete(batchId);
+    this.metricsService.recordJobProcessed(
+      PORTFOLIO_SNAPSHOT_QUEUE_NAME,
+      'success',
+    );
+  }
+
+  private async handleJobFailed(
+    job:
+      | Job<PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData>
+      | undefined,
+    err: Error,
+  ): Promise<void> {
+    if (!job) {
+      return;
+    }
+
+    if (!this.isUserJob(job)) {
+      this.logger.error(
+        `Batch job ${job.id ?? 'unknown'} failed: ${err.message}`,
+      );
+      return;
+    }
+
+    const attempts = job.opts.attempts ?? 1;
+    if (job.attemptsMade < attempts) {
+      this.logger.warn(
+        `Snapshot retry queued for user ${job.data.userId} (attempt ${job.attemptsMade}/${attempts}).`,
+      );
+      return;
+    }
+
+    await this.progressStore.ensureProgressKey(job.data.batchId);
+    await this.progressStore.incrementFailed(job.data.batchId);
+    await this.progressStore.finalizeIfComplete(job.data.batchId);
+    this.metricsService.recordJobProcessed(
+      PORTFOLIO_SNAPSHOT_QUEUE_NAME,
+      'failure',
+    );
+
+    this.logger.error(
+      `Snapshot job failed for user ${job.data.userId}: ${err.message}`,
+    );
   }
 
   private async process(

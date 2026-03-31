@@ -12,7 +12,12 @@ export interface PortfolioSnapshotUserJobData {
 
 export interface PortfolioSnapshotBatchStatus {
   batchId: string;
-  status: 'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed';
+  status:
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'completed_with_errors'
+    | 'failed';
   total: number;
   completed: number;
   failed: number;

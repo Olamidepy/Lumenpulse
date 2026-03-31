@@ -21,7 +21,6 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   GetPortfolioHistoryDto,
   PortfolioHistoryResponseDto,
-  PortfolioSummaryResponseDto,
   PortfolioSnapshotBatchStatusDto,
   TriggerSnapshotBatchResponseDto,
 } from './dto/portfolio-snapshot.dto';

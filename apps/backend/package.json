@@ -105,9 +105,9 @@
       "ts"
     ],
     "rootDir": "src",
-    "testRegex": ".*\.spec\.ts$",
+    "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\.(t|j)s$": [
+      "^.+\\.(t|j)s$": [
         "ts-jest",
         {
           "tsconfig": "tsconfig.test.json"

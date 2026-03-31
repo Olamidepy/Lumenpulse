@@ -20,12 +20,9 @@ import {
 } from './dto/portfolio-currency.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
 import { calculatePortfolioPerformance } from './utils/portfolio-performance.utils';
-<<<<<<< main
 import { PortfolioSnapshotQueueService } from './queue/portfolio-snapshot.queue.service';
 import { PortfolioSnapshotBatchStatus } from './queue/portfolio-snapshot.types';
-=======
 import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
->>>>>>> main
 
 @Injectable()
 export class PortfolioService {
@@ -39,13 +36,10 @@ export class PortfolioService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly stellarBalanceService: StellarBalanceService,
-<<<<<<< main
-    private readonly snapshotQueueService: PortfolioSnapshotQueueService,
-=======
     private readonly exchangeRatesService: ExchangeRatesService,
     private readonly stellarService: StellarService,
     private readonly priceService: PriceService,
->>>>>>> main
+    private readonly snapshotQueueService: PortfolioSnapshotQueueService,
   ) {}
 
   /**

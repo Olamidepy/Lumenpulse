@@ -131,10 +131,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return responseBody.details as ErrorResponse['details'];
     }
 
-    if (
-      status === 400 &&
-      Array.isArray(responseBody.message)
-    ) {
+    if (status === 400 && Array.isArray(responseBody.message)) {
       return (responseBody.message as string[]).map((message) => ({ message }));
     }
 
