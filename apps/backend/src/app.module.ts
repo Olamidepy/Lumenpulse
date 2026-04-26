@@ -42,6 +42,7 @@ import { UsersModule } from './users/users.module';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { VerificationModule } from './verification/verification.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { OutboxModule } from './outbox/outbox.module';
     StellarSyncModule,
     ExchangeRatesModule,
     GrantsModule,
+    VerificationModule,
     WatchlistModule,
     OutboxModule,
   ],
