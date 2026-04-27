@@ -9,6 +9,9 @@ import {
 import {
   AccessAction,
   ResourceType as ResourceTypeEnum,
+  AccessControlContext,
+  AccessControlResource,
+  PermissionResult,
 } from '../interfaces/access-control.interface';
 
 /**
