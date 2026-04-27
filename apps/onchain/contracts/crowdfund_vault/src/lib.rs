@@ -808,47 +808,70 @@ impl CrowdfundVaultContract {
         }
     }
 
-    /// Approve milestone for a project (admin only)
-    pub fn approve_milestone(
+    /// Finalize a milestone vote after the window has closed
+    pub fn finalize_milestone_vote(
         env: Env,
-        admin: Address,
         project_id: u64,
         milestone_id: u32,
     ) -> Result<(), CrowdfundError> {
-        // Verify admin (single check with helper)
-        Self::verify_admin(&env, &admin)?;
+        Self::require_current_storage_version(&env)?;
 
-        // Check Emergency Pause State (single read)
-        let is_paused: bool = env
+        // Check if already approved
+        let is_approved: bool = env
             .storage()
-            .instance()
-            .get(&DataKey::Paused)
+            .persistent()
+            .get(&DataKey::MilestoneApproved(project_id, milestone_id))
             .unwrap_or(false);
-        if is_paused {
-            return Err(CrowdfundError::ContractPaused);
+        if is_approved {
+            return Err(CrowdfundError::MilestoneAlreadyApproved);
         }
 
-        let mut project: ProjectData = env
+        // Check voting window
+        let end_time: u64 = env
             .storage()
             .persistent()
-            .get(&DataKey::Project(project_id))
-            .ok_or(CrowdfundError::ProjectNotFound)?;
-        Self::fail_if_project_expired(&env, project_id, &mut project)?;
+            .get(&DataKey::MilestoneVoteWindow(project_id, milestone_id))
+            .ok_or(CrowdfundError::VotingWindowNotStarted)?;
 
-        // Approve milestone
-        env.storage()
+        if env.ledger().timestamp() <= end_time {
+            return Err(CrowdfundError::VotingWindowNotClosed);
+        }
+
+        let votes_for: i128 = env
+            .storage()
             .persistent()
-            .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
-        env.storage().persistent().set(
-            &DataKey::MilestoneDisputed(project_id, milestone_id),
-            &false,
-        );
+            .get(&DataKey::MilestoneVotesFor(project_id, milestone_id))
+            .unwrap_or(0);
+        let votes_against: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneVotesAgainst(project_id, milestone_id))
+            .unwrap_or(0);
 
-        // Emit milestone approval event
-        events::MilestoneApprovedEvent {
-            admin,
+        let approved = votes_for > votes_against;
+
+        if approved {
+            env.storage()
+                .persistent()
+                .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
+            env.storage().persistent().set(
+                &DataKey::MilestoneDisputed(project_id, milestone_id),
+                &false,
+            );
+
+            events::MilestoneApprovedByVoteEvent {
+                project_id,
+                milestone_id,
+            }
+            .publish(&env);
+        }
+
+        events::MilestoneVoteFinalizedEvent {
             project_id,
             milestone_id,
+            votes_for,
+            votes_against,
+            approved,
         }
         .publish(&env);
 
