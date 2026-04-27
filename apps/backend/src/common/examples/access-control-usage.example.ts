@@ -22,10 +22,12 @@ import {
   GetResource,
   GetPermissionResult,
 } from '../decorators/access-control.decorators';
-import {
+import type {
   AccessControlContext,
   AccessControlResource,
   PermissionResult,
+} from '../interfaces/access-control.interface';
+import {
   AccessAction,
   ResourceType,
 } from '../interfaces/access-control.interface';

@@ -1,5 +1,5 @@
 import { SetMetadata, createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AccessAction, ResourceType } from '../interfaces/access-control.interface';
+import { AccessAction, ResourceType as ResourceTypeEnum } from '../interfaces/access-control.interface';
 
 /**
  * Metadata keys for access control decorators
@@ -13,7 +13,7 @@ export const TRUSTED_CALLER_KEY = 'trusted_caller';
  */
 export interface PermissionMetadata {
   action: AccessAction | string;
-  resourceType: ResourceType | string;
+  resourceType: ResourceTypeEnum | string;
   resourceIdParam?: string; // Parameter name that contains the resource ID
   ownerIdParam?: string; // Parameter name that contains the owner ID
 }
@@ -46,7 +46,7 @@ export const RequirePermission = (metadata: PermissionMetadata) =>
  * Decorator to specify the resource type for a route
  * Used in combination with permission guards
  */
-export const ResourceType = (type: ResourceType | string) =>
+export const ResourceTypeDecorator = (type: ResourceTypeEnum | string) =>
   SetMetadata(RESOURCE_TYPE_KEY, type);
 
 /**
@@ -106,7 +106,7 @@ export const GetPermissionResult = createParamDecorator(
 export const RequireUserRead = (resourceIdParam = 'userId') =>
   RequirePermission({
     action: AccessAction.READ,
-    resourceType: ResourceType.USER,
+    resourceType: ResourceTypeEnum.USER,
     resourceIdParam,
   });
 
@@ -116,7 +116,7 @@ export const RequireUserRead = (resourceIdParam = 'userId') =>
 export const RequireUserWrite = (resourceIdParam = 'userId') =>
   RequirePermission({
     action: AccessAction.WRITE,
-    resourceType: ResourceType.USER,
+    resourceType: ResourceTypeEnum.USER,
     resourceIdParam,
   });
 
@@ -129,7 +129,7 @@ export const RequirePortfolioRead = (
 ) =>
   RequirePermission({
     action: AccessAction.READ,
-    resourceType: ResourceType.PORTFOLIO,
+    resourceType: ResourceTypeEnum.PORTFOLIO,
     resourceIdParam,
     ownerIdParam,
   });
@@ -143,7 +143,7 @@ export const RequirePortfolioWrite = (
 ) =>
   RequirePermission({
     action: AccessAction.WRITE,
-    resourceType: ResourceType.PORTFOLIO,
+    resourceType: ResourceTypeEnum.PORTFOLIO,
     resourceIdParam,
     ownerIdParam,
   });

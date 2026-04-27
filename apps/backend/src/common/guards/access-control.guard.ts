@@ -24,6 +24,14 @@ import {
   TrustedCallerMetadata,
 } from '../decorators/access-control.decorators';
 
+// Extend Request interface to include our custom properties
+interface ExtendedRequest extends Request {
+  accessContext?: AccessControlContext;
+  accessResource?: AccessControlResource;
+  permissionResult?: PermissionResult;
+  trustedCallerResult?: any;
+}
+
 /**
  * Unified guard that handles both permission checking and trusted caller verification
  * using the shared access control interface
@@ -38,7 +46,7 @@ export class AccessControlGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<ExtendedRequest>();
 
     // Create access control context
     const accessContext = this.createAccessContext(request);
@@ -64,7 +72,7 @@ export class AccessControlGuard implements CanActivate {
   /**
    * Create access control context from request
    */
-  private createAccessContext(request: Request): AccessControlContext {
+  private createAccessContext(request: ExtendedRequest): AccessControlContext {
     const user = (request as any).user;
     const ip = this.getClientIp(request);
 
@@ -91,7 +99,7 @@ export class AccessControlGuard implements CanActivate {
    */
   private async checkTrustedCaller(
     context: ExecutionContext,
-    request: Request,
+    request: ExtendedRequest,
   ): Promise<boolean | null> {
     const trustedCallerMeta = this.reflector.getAllAndOverride<TrustedCallerMetadata>(
       TRUSTED_CALLER_KEY,
@@ -124,7 +132,7 @@ export class AccessControlGuard implements CanActivate {
       }
 
       // Store verification result in request for later use
-      (request as any).trustedCallerResult = result;
+      request.trustedCallerResult = result;
 
       return result.trusted;
     } catch (error) {
@@ -141,7 +149,7 @@ export class AccessControlGuard implements CanActivate {
    */
   private buildTrustedCallerRequest(
     verificationType: string,
-    request: Request,
+    request: ExtendedRequest,
   ): TrustedCallerRequest {
     const headers = request.headers;
     const ip = this.getClientIp(request);
@@ -185,7 +193,7 @@ export class AccessControlGuard implements CanActivate {
    */
   private async checkPermissions(
     context: ExecutionContext,
-    request: Request,
+    request: ExtendedRequest,
     accessContext: AccessControlContext,
   ): Promise<PermissionResult | null> {
     const permissionMeta = this.reflector.getAllAndOverride<PermissionMetadata>(
@@ -216,7 +224,7 @@ export class AccessControlGuard implements CanActivate {
    */
   private buildAccessResource(
     metadata: PermissionMetadata,
-    request: Request,
+    request: ExtendedRequest,
   ): AccessControlResource {
     const params = (request as any).params || {};
     const query = (request as any).query || {};
