@@ -16,7 +16,8 @@ use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{
-    DataKey, MilestoneDispute, ProjectData, ProtocolStats, RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD,
+    DataKey, MilestoneDispute, ProjectData, ProtocolStats, RefundReceipt, LEDGER_BUMP,
+    LEDGER_THRESHOLD,
 };
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
@@ -473,7 +474,12 @@ impl CrowdfundVaultContract {
                 if amount > 0 {
                     // Check if already claimed (double-claim protection)
                     let claimed_key = DataKey::RefundClaimed(project_id, contributor.clone());
-                    if env.storage().persistent().get(&claimed_key).unwrap_or(false) {
+                    if env
+                        .storage()
+                        .persistent()
+                        .get(&claimed_key)
+                        .unwrap_or(false)
+                    {
                         continue;
                     }
 
@@ -491,15 +497,19 @@ impl CrowdfundVaultContract {
                     };
                     let receipt_key = DataKey::RefundReceipt(project_id, receipt_count);
                     env.storage().persistent().set(&receipt_key, &receipt);
-                    env.storage()
-                        .persistent()
-                        .extend_ttl(&receipt_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                    env.storage().persistent().extend_ttl(
+                        &receipt_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
 
                     // Mark as claimed
                     env.storage().persistent().set(&claimed_key, &true);
-                    env.storage()
-                        .persistent()
-                        .extend_ttl(&claimed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                    env.storage().persistent().extend_ttl(
+                        &claimed_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
 
                     receipt_count += 1;
 
@@ -583,7 +593,12 @@ impl CrowdfundVaultContract {
 
             // Check if already claimed (double-claim protection)
             let claimed_key = DataKey::RefundClaimed(project_id, contributor.clone());
-            if env.storage().persistent().get(&claimed_key).unwrap_or(false) {
+            if env
+                .storage()
+                .persistent()
+                .get(&claimed_key)
+                .unwrap_or(false)
+            {
                 return Err(CrowdfundError::RefundFailed);
             }
 
@@ -638,9 +653,10 @@ impl CrowdfundVaultContract {
                 .extend_ttl(&claimed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
             // Update receipt count
-            env.storage()
-                .persistent()
-                .set(&DataKey::RefundReceiptCount(project_id), &(receipt_count + 1));
+            env.storage().persistent().set(
+                &DataKey::RefundReceiptCount(project_id),
+                &(receipt_count + 1),
+            );
 
             events::ContributionClawedBackEvent {
                 project_id,
@@ -1655,10 +1671,7 @@ impl CrowdfundVaultContract {
     }
 
     /// Get the total count of refund receipts for a project
-    pub fn get_refund_receipt_count(
-        env: Env,
-        project_id: u64,
-    ) -> Result<u64, CrowdfundError> {
+    pub fn get_refund_receipt_count(env: Env, project_id: u64) -> Result<u64, CrowdfundError> {
         Self::require_current_storage_version(&env)?;
         env.storage()
             .persistent()

@@ -2520,9 +2520,8 @@ fn test_double_claim_protection_clawback() {
     client.deposit(&user, &project_id, &400_000);
 
     // Expire the project
-    env.ledger().set_timestamp(
-        env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1,
-    );
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
 
     // First clawback should succeed
     let refunded = client.clawback_contribution(&project_id, &user);
@@ -2550,9 +2549,8 @@ fn test_refund_receipt_persistence_clawback() {
     client.deposit(&user, &project_id, &400_000);
 
     // Expire the project
-    env.ledger().set_timestamp(
-        env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1,
-    );
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
 
     // Clawback contribution
     client.clawback_contribution(&project_id, &user);
@@ -2577,7 +2575,8 @@ fn test_refund_receipt_persistence_bulk_refund() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, owner, _user, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+    let (client, admin, owner, _user, token_client, token_admin_client, _) =
+        setup_test_with_admin(&env);
     client.initialize(&admin);
 
     let user1 = Address::generate(&env);
@@ -2626,7 +2625,8 @@ fn test_double_claim_protection_bulk_refund() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, owner, _user, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+    let (client, admin, owner, _user, token_client, token_admin_client, _) =
+        setup_test_with_admin(&env);
     client.initialize(&admin);
 
     let user1 = Address::generate(&env);
