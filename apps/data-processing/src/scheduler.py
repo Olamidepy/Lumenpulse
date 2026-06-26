@@ -17,6 +17,13 @@ from database import DatabaseService, AnalyticsRecord
 from anomaly_detector import AnomalyDetector, AnomalyResult
 from alertbot import AlertBot
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
+from src.ingestion.run_ingestion_quality_checks import main as run_ingestion_quality_checks
+from src.analytics.project_verification_trend import (
+    ProjectVerificationTrendAnalyzer,
+    VerificationRecord,
+)
+from src.ingestion.rpc_benchmark import RPCProviderBenchmark
+
 
 logger = setup_logger(__name__)
 
@@ -177,7 +184,55 @@ def _retraining_job() -> None:
         logger.error(f"Scheduled retraining job raised an exception: {exc}", exc_info=True)
 
 
+def _ingestion_quality_checks_job() -> None:
+    """Run Stellar testnet ingestion quality checks.
+
+    Scheduled wrapper. Errors are caught so the scheduler keeps running.
+    """
+    try:
+        run_ingestion_quality_checks(argv=None)
+    except SystemExit:
+        # CLI may call sys.exit; ignore to keep scheduler alive.
+        pass
+    except Exception as e:
+        logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
+
+
+def _project_verification_trend_job() -> None:
+    """Scheduled wrapper for ProjectVerificationTrendAnalyzer (#885).
+
+    Runs analysis over any buffered verification records and logs the result.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        analyzer = ProjectVerificationTrendAnalyzer()
+        result = analyzer.analyze()
+        logger.info(
+            "Project verification trend: direction=%s approval=%.1f%% total=%d",
+            result.trend_direction,
+            result.approval_rate * 100,
+            result.total,
+        )
+    except Exception as exc:
+        logger.error("Project verification trend job failed: %s", exc, exc_info=True)
+
+
+def _rpc_provider_benchmark_job() -> None:
+    """Scheduled wrapper for RPCProviderBenchmark (#884).
+
+    Probes all configured Stellar RPC/Horizon providers and logs the winner.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        bench = RPCProviderBenchmark()
+        report = bench.run()
+        logger.info("RPC benchmark best provider: %s", report.best_provider)
+    except Exception as exc:
+        logger.error("RPC provider benchmark job failed: %s", exc, exc_info=True)
+
+
 class AnalyticsScheduler:
+
     """Manages the APScheduler scheduler for analytics jobs"""
 
     def __init__(self, pipeline_fn=None):
@@ -199,12 +254,40 @@ class AnalyticsScheduler:
                 replace_existing=True,
             )
 
+            # ── Stellar ingestion quality checks: every hour ──────────
+            # Low-noise: only fails CI/process when ingestion lag is critical.
+            quality_job = self.scheduler.add_job(
+                func=self._ingestion_quality_checks_job,
+                trigger=IntervalTrigger(hours=1),
+                id="stellar_ingestion_quality_checks_hourly",
+                name="Stellar Ingestion Quality Checks - Hourly",
+                replace_existing=True,
+            )
+
             # ── Model Retraining: daily at 02:00 UTC ─────────────────────
             retrain_job = self.scheduler.add_job(
                 func=_retraining_job,
                 trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
                 id="model_retraining_daily",
                 name="Automated Model Retraining - Daily",
+                replace_existing=True,
+            )
+
+            # ── Project Verification Trend: every 6 hours (#885) ─────────
+            self.scheduler.add_job(
+                func=_project_verification_trend_job,
+                trigger=IntervalTrigger(hours=6),
+                id="project_verification_trend",
+                name="Project Verification Trend Analyzer",
+                replace_existing=True,
+            )
+
+            # ── RPC Provider Benchmark: every 30 minutes (#884) ──────────
+            self.scheduler.add_job(
+                func=_rpc_provider_benchmark_job,
+                trigger=IntervalTrigger(minutes=30),
+                id="rpc_provider_benchmark",
+                name="RPC Provider Benchmark",
                 replace_existing=True,
             )
 
